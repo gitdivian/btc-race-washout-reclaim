@@ -19,6 +19,8 @@ import type { BarsState, Batch, OrderInput } from '../vendor/makefun-bars.ts';
 export interface WashoutParams {
   /** Trailing window, in bars, for the high of closes the drawdown is measured from. */
   highWindowBars: number;
+  /** Bars at the start of a window during which no entry is taken (warm-up). */
+  warmupBars: number;
   /** Drawdown from the trailing high (a fraction, 0.0105 = 1.05%) that arms an episode. */
   armDrawdown: number;
   /** Recovery of the drawdown (a fraction) that ends an unfilled episode. */
@@ -45,9 +47,10 @@ export interface WashoutParams {
 
 export const DEFAULT_PARAMS: WashoutParams = {
   highWindowBars: 180,
+  warmupBars: 30,
   armDrawdown: 0.0105,
   resetDrawdown: 0.0035,
-  reclaimBounce: 0.0025,
+  reclaimBounce: 0.0020,
   takeProfit: 0.016,
   stopLoss: 0.009,
   trailArm: 0.008,
@@ -164,6 +167,9 @@ export function createWashoutReclaim(params: WashoutParams = DEFAULT_PARAMS): {
 
     // Flat: enter only on a confirmed reclaim off an armed episode's trough.
     if (pendingBuy || episode === null) return [];
+    // Warm-up: on partial history the trailing high is not yet meaningful, so
+    // the first bars of a window never produce an entry.
+    if (bar <= params.warmupBars) return [];
     if (entries >= params.maxEntries || bar < cooldownUntil) return [];
     const bounced = episode.troughBar < bar && close >= episode.troughLow * (1 + params.reclaimBounce);
     const twoUp =
